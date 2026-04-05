@@ -1,0 +1,587 @@
+/* =========================================
+   GitTab — Design System & Popup Styles
+   ========================================= */
+
+/* --- Design Tokens (from DESIGN.md) --- */
+:root {
+  /* Surface hierarchy */
+  --surface:                  #f8f9fb;
+  --surface-bright:           #f8f9fb;
+  --surface-dim:              #cfdce3;
+  --surface-variant:          #d9e4ea;
+  --surface-container-lowest: #ffffff;
+  --surface-container-low:    #f0f4f7;
+  --surface-container:        #e8eff3;
+  --surface-container-high:   #e1e9ee;
+  --surface-container-highest:#d9e4ea;
+
+  /* Primary */
+  --primary:                  #5a5f66;
+  --primary-dim:              #4e5359;
+  --primary-container:        #dee3eb;
+  --primary-fixed:            #dee3eb;
+  --on-primary:               #f5f8ff;
+  --on-primary-container:     #4d5259;
+
+  /* Secondary (green — "commit" accent) */
+  --secondary:                #006e2c;
+  --secondary-dim:            #006126;
+  --secondary-container:      #88fb99;
+  --on-secondary:             #e9ffe5;
+  --on-secondary-container:   #005f25;
+
+  /* Tertiary (blue) */
+  --tertiary:                 #005bc1;
+  --tertiary-container:       #458bfe;
+  --on-tertiary:              #f9f8ff;
+
+  /* Error */
+  --error:                    #9f403d;
+  --error-container:          #fe8983;
+  --on-error:                 #fff7f6;
+
+  /* Surface text */
+  --on-surface:               #2a3439;
+  --on-surface-variant:       #566166;
+  --on-background:            #2a3439;
+  --outline:                  #717c82;
+  --outline-variant:          #a9b4b9;
+  --inverse-surface:          #0b0f10;
+  --inverse-on-surface:       #9a9d9f;
+
+  /* Brand */
+  --brand-blue:               #0969da;
+
+  /* Roundedness */
+  --radius-sm:  2px;
+  --radius-md:  6px;
+  --radius-lg:  4px;
+  --radius-xl:  8px;
+  --radius-full: 12px;
+
+  /* Shadows */
+  --shadow-card:   0 4px 12px rgba(42, 52, 57, 0.04);
+  --shadow-ambient: 0 10px 30px -5px rgba(42, 52, 57, 0.08);
+  --shadow-elevated: 0 -10px 30px -5px rgba(42, 52, 57, 0.08);
+
+  /* Transitions */
+  --ease-fast: cubic-bezier(0.2, 0, 0, 1);
+  --duration-fast: 150ms;
+  --duration-normal: 200ms;
+}
+
+/* --- Base Reset & Typography --- */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--surface);
+  color: var(--on-surface);
+  width: 350px;
+  height: 480px;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.4;
+  position: relative;
+}
+
+/* Selection */
+::selection {
+  background: var(--primary-container);
+}
+
+/* Font families */
+.font-headline { font-family: 'Inter', sans-serif; }
+.font-body     { font-family: 'Inter', sans-serif; }
+.font-label    { font-family: 'Space Grotesk', monospace; }
+
+/* Material Symbols */
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  vertical-align: middle;
+  font-size: 20px;
+}
+
+/* --- Ghost border (used in lieu of solid borders per DESIGN.md) --- */
+.ghost-border {
+  outline: 1px solid rgba(113, 124, 130, 0.15);
+}
+
+/* --- Layout --- */
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* --- Header / TopAppBar --- */
+.header {
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0 16px;
+  height: 56px;
+  width: 100%;
+  flex-shrink: 0;
+}
+
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.header-brand-icon {
+  color: var(--brand-blue);
+  font-size: 22px;
+}
+
+.header-title {
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+  color: var(--on-surface);
+}
+
+/* --- Main content area --- */
+.main-content {
+  flex: 1;
+  padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+  background: var(--surface-container-low);
+}
+
+/* --- Current Target Chip --- */
+.current-target {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  background: var(--surface-container-lowest);
+  border-radius: var(--radius-xl);
+}
+
+.current-target-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+}
+
+.current-target-label {
+  font-family: 'Space Grotesk', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--on-surface-variant);
+}
+
+.current-target-url {
+  font-family: 'Space Grotesk', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--on-surface);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+.status-chip {
+  padding: 3px 8px;
+  border-radius: var(--radius-md);
+  font-family: 'Space Grotesk', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.status-chip--staged {
+  background: var(--secondary-container);
+  color: var(--on-secondary-container);
+}
+
+/* --- Action Buttons --- */
+.actions-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.action-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  background: var(--surface-container-lowest);
+  border-radius: var(--radius-full);
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  transition: all var(--duration-normal) var(--ease-fast);
+}
+
+.action-card:hover {
+  background: #ffffff;
+}
+
+.action-card:active {
+  transform: scale(0.98);
+}
+
+/* The green "commit pillar" on hover */
+.action-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--secondary);
+  opacity: 0;
+  transition: opacity var(--duration-normal) var(--ease-fast);
+}
+
+.action-card:hover::before {
+  opacity: 1;
+}
+
+.action-icon {
+  display: flex;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-xl);
+  background: var(--primary-container);
+  color: var(--primary);
+}
+
+.action-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.action-title {
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: -0.02em;
+  color: var(--on-surface);
+}
+
+.action-subtitle {
+  font-family: 'Space Grotesk', monospace;
+  font-size: 10px;
+  color: var(--on-surface-variant);
+}
+
+/* --- Primary CTA Button --- */
+.btn-primary {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 0;
+  background: linear-gradient(135deg, var(--primary), var(--primary-dim));
+  color: var(--on-primary);
+  border: none;
+  border-radius: var(--radius-full);
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  box-shadow: var(--shadow-card);
+  transition: all var(--duration-normal) var(--ease-fast);
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, var(--primary-dim), var(--primary));
+  box-shadow: var(--shadow-ambient);
+}
+
+.btn-primary:active {
+  transform: scale(0.98);
+}
+
+.btn-primary .material-symbols-outlined {
+  font-size: 16px;
+}
+
+/* --- Session Name Modal (inline) --- */
+.session-name-input-wrapper {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--surface-container-lowest);
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-card);
+  animation: slideDown 200ms var(--ease-fast);
+}
+
+.session-name-input-wrapper.visible {
+  display: flex;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.session-name-input {
+  width: 100%;
+  padding: 10px 12px;
+  background: var(--surface-container-low);
+  border: none;
+  border-radius: var(--radius-md);
+  font-family: 'Space Grotesk', monospace;
+  font-size: 13px;
+  color: var(--on-surface);
+  outline: none;
+  transition: outline var(--duration-fast) var(--ease-fast);
+}
+
+.session-name-input:focus {
+  outline: 2px solid rgba(113, 124, 130, 0.4);
+}
+
+.session-name-input::placeholder {
+  color: var(--outline);
+}
+
+.session-name-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-confirm {
+  flex: 1;
+  padding: 8px;
+  background: var(--secondary);
+  color: var(--on-secondary);
+  border: none;
+  border-radius: var(--radius-md);
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-fast);
+}
+
+.btn-confirm:hover {
+  background: var(--secondary-dim);
+}
+
+.btn-cancel {
+  padding: 8px 12px;
+  background: transparent;
+  color: var(--primary);
+  border: none;
+  border-radius: var(--radius-md);
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-fast);
+}
+
+.btn-cancel:hover {
+  background: var(--surface-container);
+}
+
+/* --- Recent Commits Section --- */
+.recent-section {
+  padding-top: 8px;
+}
+
+.recent-heading {
+  font-family: 'Space Grotesk', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  color: var(--on-surface-variant);
+  padding: 0 4px;
+  margin-bottom: 8px;
+}
+
+.recent-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.recent-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px;
+  background: var(--surface-container);
+  border-radius: var(--radius-xl);
+  transition: background var(--duration-fast) var(--ease-fast);
+}
+
+.recent-item:hover {
+  background: var(--surface-container-high);
+}
+
+.recent-item-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  overflow: hidden;
+}
+
+.recent-item-icon {
+  font-size: 14px;
+  color: var(--on-surface-variant);
+  flex-shrink: 0;
+}
+
+.recent-item-name {
+  font-family: 'Space Grotesk', monospace;
+  font-size: 12px;
+  color: var(--on-surface);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 160px;
+}
+
+.recent-item-time {
+  font-family: 'Space Grotesk', monospace;
+  font-size: 9px;
+  color: var(--outline);
+  flex-shrink: 0;
+}
+
+/* Empty state */
+.recent-empty {
+  font-family: 'Space Grotesk', monospace;
+  font-size: 11px;
+  color: var(--outline);
+  text-align: center;
+  padding: 12px 0;
+}
+
+/* --- Footer --- */
+.footer {
+  height: 52px;
+  background: var(--surface-container-lowest);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  flex-shrink: 0;
+  box-shadow: var(--shadow-elevated);
+}
+
+.footer-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.footer-icon {
+  font-size: 12px;
+  color: var(--secondary);
+  font-variation-settings: 'FILL' 1;
+}
+
+.footer-text {
+  font-family: 'Space Grotesk', monospace;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--on-surface-variant);
+}
+
+.footer-sub {
+  font-family: 'Space Grotesk', monospace;
+  font-size: 9px;
+  color: var(--outline);
+  text-transform: uppercase;
+  letter-spacing: -0.02em;
+}
+
+/* --- Background Grid Pattern (subtle) --- */
+.bg-grid {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  opacity: 0.03;
+  z-index: -1;
+}
+
+/* --- Toast / Feedback --- */
+.toast {
+  position: fixed;
+  bottom: 60px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  padding: 10px 20px;
+  background: var(--inverse-surface);
+  color: var(--inverse-on-surface);
+  font-family: 'Space Grotesk', monospace;
+  font-size: 12px;
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-ambient);
+  opacity: 0;
+  pointer-events: none;
+  transition: all 300ms var(--ease-fast);
+  z-index: 100;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* --- Scrollbar (subtle) --- */
+.main-content::-webkit-scrollbar {
+  width: 4px;
+}
+
+.main-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.main-content::-webkit-scrollbar-thumb {
+  background: var(--outline-variant);
+  border-radius: 4px;
+}
+
+/* --- Loading spinner --- */
+.spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--on-primary);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 600ms linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

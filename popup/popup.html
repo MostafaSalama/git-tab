@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GitTab</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <div class="app-container">
+
+    <!-- Header -->
+    <header class="header">
+      <div class="header-brand">
+        <span class="material-symbols-outlined header-brand-icon">account_tree</span>
+        <h1 class="header-title">GitTab</h1>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+
+      <!-- Current Target Chip -->
+      <div class="current-target ghost-border" id="current-target">
+        <div class="current-target-info">
+          <span class="current-target-label">Current Target</span>
+          <span class="current-target-url" id="current-target-url">Loading…</span>
+        </div>
+        <div class="status-chip status-chip--staged">STAGED</div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="actions-grid">
+        <!-- Commit Current Tab -->
+        <button class="action-card ghost-border" id="btn-commit-tab">
+          <div class="action-icon">
+            <span class="material-symbols-outlined">commit</span>
+          </div>
+          <div class="action-text">
+            <span class="action-title">Commit Current Tab</span>
+            <span class="action-subtitle">Store current active URL to repository</span>
+          </div>
+        </button>
+
+        <!-- Commit Entire Session -->
+        <button class="action-card ghost-border" id="btn-commit-session">
+          <div class="action-icon">
+            <span class="material-symbols-outlined">layers</span>
+          </div>
+          <div class="action-text">
+            <span class="action-title">Commit Entire Session</span>
+            <span class="action-subtitle" id="tab-count-label">Bundle all open tabs into a snapshot</span>
+          </div>
+        </button>
+      </div>
+
+      <!-- Session Name Input (hidden by default, shown when committing session) -->
+      <div class="session-name-input-wrapper" id="session-name-wrapper">
+        <input
+          type="text"
+          class="session-name-input"
+          id="session-name-input"
+          placeholder="Session name (e.g., Project Alpha)"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <div class="session-name-actions">
+          <button class="btn-confirm" id="btn-session-confirm">
+            <span class="material-symbols-outlined" style="font-size:14px; vertical-align: -2px;">check</span>
+            Commit
+          </button>
+          <button class="btn-cancel" id="btn-session-cancel">Cancel</button>
+        </div>
+      </div>
+
+      <!-- Open Repository -->
+      <div>
+        <button class="btn-primary" id="btn-open-repo">
+          <span class="material-symbols-outlined">folder_open</span>
+          Open Repository
+        </button>
+      </div>
+
+      <!-- Recent Commits -->
+      <div class="recent-section">
+        <h3 class="recent-heading">Recent Commits</h3>
+        <div class="recent-list" id="recent-list">
+          <p class="recent-empty">No commits yet</p>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <div class="footer-badge">
+        <span class="material-symbols-outlined footer-icon">verified_user</span>
+        <span class="footer-text">Local Storage Only</span>
+      </div>
+      <p class="footer-sub">Privacy First Architecture</p>
+    </footer>
+
+  </div>
+
+  <!-- Toast notification -->
+  <div class="toast" id="toast"></div>
+
+  <!-- Background Grid Pattern -->
+  <div class="bg-grid">
+    <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%">
+      <defs>
+        <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+          <path d="M 20 0 L 0 0 0 20" fill="none" stroke="currentColor" stroke-width="1" />
+        </pattern>
+      </defs>
+      <rect fill="url(#grid)" width="100%" height="100%" />
+    </svg>
+  </div>
+
+  <!-- Scripts -->
+  <script src="../shared/storage.js"></script>
+  <script src="../shared/utils.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

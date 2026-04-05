@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GitTab — Repository</title>
+  <meta name="description" content="GitTab repository dashboard. Browse, search, and restore your saved tab sessions." />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="dashboard.css" />
+</head>
+<body>
+  <div class="dashboard">
+
+    <!-- Header -->
+    <header class="dash-header">
+      <div class="dash-header-left">
+        <span class="material-symbols-outlined dash-brand-icon">account_tree</span>
+        <h1 class="dash-title">GitTab</h1>
+        <span class="dash-subtitle">Repository</span>
+      </div>
+      <div class="dash-header-actions">
+        <div class="dash-stat" id="total-stats">
+          <span class="dash-stat-value" id="total-sessions">0</span>
+          <span class="dash-stat-label">sessions</span>
+          <span style="margin: 0 4px; color: var(--outline);">·</span>
+          <span class="dash-stat-value" id="total-tabs">0</span>
+          <span class="dash-stat-label">tabs</span>
+        </div>
+        <button class="btn-icon" id="btn-discard" title="Discard inactive tabs to free memory">
+          <span class="material-symbols-outlined">memory</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Search Bar -->
+    <div class="search-container">
+      <span class="material-symbols-outlined search-icon">search</span>
+      <input
+        type="text"
+        class="search-input"
+        id="search-input"
+        placeholder="Search tabs by title or URL…"
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <button class="search-clear" id="search-clear">
+        <span class="material-symbols-outlined" style="font-size:16px;">close</span>
+      </button>
+    </div>
+
+    <!-- Search Results Info -->
+    <div class="search-results-info" id="search-results-info"></div>
+
+    <!-- Sessions List -->
+    <div class="sessions-list" id="sessions-list">
+      <!-- Rendered dynamically -->
+    </div>
+
+  </div>
+
+  <!-- Confirm Dialog -->
+  <div class="confirm-overlay" id="confirm-overlay">
+    <div class="confirm-dialog">
+      <h3 class="confirm-title" id="confirm-title">Confirm</h3>
+      <p class="confirm-message" id="confirm-message">Are you sure?</p>
+      <div class="confirm-actions">
+        <button class="btn-sm btn-sm--cancel" id="confirm-cancel">Cancel</button>
+        <button class="btn-sm btn-sm--danger" id="confirm-ok">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <!-- Background Grid -->
+  <div class="bg-grid">
+    <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%">
+      <defs>
+        <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+          <path d="M 20 0 L 0 0 0 20" fill="none" stroke="currentColor" stroke-width="1" />
+        </pattern>
+      </defs>
+      <rect fill="url(#grid)" width="100%" height="100%" />
+    </svg>
+  </div>
+
+  <!-- Scripts -->
+  <script src="../shared/storage.js"></script>
+  <script src="../shared/utils.js"></script>
+  <script src="dashboard.js"></script>
+</body>
+</html>
