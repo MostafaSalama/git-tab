@@ -27,6 +27,13 @@
           <span class="dash-stat-value" id="total-tabs">0</span>
           <span class="dash-stat-label">tabs</span>
         </div>
+        <button class="btn-icon" id="btn-export" title="Export backup (JSON)">
+          <span class="material-symbols-outlined">download</span>
+        </button>
+        <button class="btn-icon" id="btn-import" title="Import backup (JSON)">
+          <span class="material-symbols-outlined">upload</span>
+        </button>
+        <input type="file" id="import-file-input" accept=".json" style="display:none" />
         <button class="btn-icon" id="btn-discard" title="Discard inactive tabs to free memory">
           <span class="material-symbols-outlined">memory</span>
         </button>
@@ -70,6 +77,12 @@
       </div>
     </div>
   </div>
+
+  <!-- Undo FAB -->
+  <button class="undo-fab" id="undo-fab" style="display:none">
+    <span class="material-symbols-outlined" style="font-size:20px;">undo</span>
+    <span class="undo-fab-text">Undo</span>
+  </button>
 
   <!-- Toast -->
   <div class="toast" id="toast"></div>

@@ -4,7 +4,9 @@
  */
 
 const STORAGE_KEY = 'gittab_data';
+const TRASH_KEY = 'gittab_trash';
 const READ_LATER_ID = 'sess_read_later';
+const TRASH_TTL = 30 * 60 * 1000; // 30 minutes
 
 /**
  * Get the full data object from storage.
@@ -122,7 +124,7 @@ async function createSession(name, tabs) {
 }
 
 /**
- * Delete a single tab from a session.
+ * Delete a single tab from a session. Stashes it in trash for undo.
  * @param {string} sessionId
  * @param {string} tabId
  */
@@ -130,6 +132,19 @@ async function deleteTab(sessionId, tabId) {
   const data = await getData();
   const session = data.sessions.find(s => s.id === sessionId);
   if (!session) return;
+
+  const removedTab = session.tabs.find(t => t.id === tabId);
+
+  // Stash in trash before removing
+  if (removedTab) {
+    await setTrash({
+      type: 'tab',
+      sessionId: sessionId,
+      sessionName: session.name,
+      tab: { ...removedTab },
+      deletedAt: Date.now()
+    });
+  }
 
   session.tabs = session.tabs.filter(t => t.id !== tabId);
 
@@ -142,17 +157,34 @@ async function deleteTab(sessionId, tabId) {
 }
 
 /**
- * Delete an entire session.
+ * Delete an entire session. Stashes it in trash for undo.
  * @param {string} sessionId
  */
 async function deleteSession(sessionId) {
-  // Don't allow deleting the Read Later session itself, just clear it
   const data = await getData();
 
   if (sessionId === READ_LATER_ID) {
     const session = data.sessions.find(s => s.id === READ_LATER_ID);
-    if (session) session.tabs = [];
+    if (session && session.tabs.length > 0) {
+      // Stash the cleared tabs
+      await setTrash({
+        type: 'session-clear',
+        sessionId: READ_LATER_ID,
+        sessionName: 'Read Later',
+        tabs: [...session.tabs],
+        deletedAt: Date.now()
+      });
+      session.tabs = [];
+    }
   } else {
+    const session = data.sessions.find(s => s.id === sessionId);
+    if (session) {
+      await setTrash({
+        type: 'session',
+        session: { ...session, tabs: [...session.tabs] },
+        deletedAt: Date.now()
+      });
+    }
     data.sessions = data.sessions.filter(s => s.id !== sessionId);
   }
 
@@ -233,8 +265,214 @@ function generateId(prefix) {
   return `${prefix}_${id}`;
 }
 
-// Export for use in other modules (ES module style, loaded via <script>)
-// In a Chrome extension context, we use globalThis to share across files
+/* =====================
+   Trash / Undo System
+   ===================== */
+
+/**
+ * Save an item to the single-entry trash.
+ * @param {Object} trashItem
+ */
+async function setTrash(trashItem) {
+  try {
+    await chrome.storage.local.set({ [TRASH_KEY]: trashItem });
+  } catch (e) {
+    console.warn('[GitTab] Could not save trash:', e.message);
+  }
+}
+
+/**
+ * Get the current trash item (or null if empty/expired).
+ * @returns {Promise<Object|null>}
+ */
+async function getTrash() {
+  const result = await chrome.storage.local.get(TRASH_KEY);
+  const trash = result[TRASH_KEY];
+  if (!trash) return null;
+
+  // Expire after TRASH_TTL
+  if (Date.now() - trash.deletedAt > TRASH_TTL) {
+    await clearTrash();
+    return null;
+  }
+  return trash;
+}
+
+/**
+ * Clear the trash.
+ */
+async function clearTrash() {
+  await chrome.storage.local.remove(TRASH_KEY);
+}
+
+/**
+ * Undo the last delete by restoring from trash.
+ * @returns {Promise<{type: string, name: string}|null>} What was restored
+ */
+async function undoLastDelete() {
+  const trash = await getTrash();
+  if (!trash) return null;
+
+  const data = await getData();
+
+  if (trash.type === 'tab') {
+    // Restore a single tab back into its session
+    let session = data.sessions.find(s => s.id === trash.sessionId);
+    if (!session) {
+      // Session was also removed (was empty + unpinned), re-create it
+      session = {
+        id: trash.sessionId,
+        name: trash.sessionName || 'Restored Session',
+        createdAt: Date.now(),
+        isPinned: false,
+        tabs: []
+      };
+      data.sessions.push(session);
+    }
+    session.tabs.unshift(trash.tab);
+    await setData(data);
+    await clearTrash();
+    return { type: 'tab', name: trash.tab.title };
+
+  } else if (trash.type === 'session') {
+    // Restore an entire session
+    const readLaterIdx = data.sessions.findIndex(s => s.id === READ_LATER_ID);
+    if (readLaterIdx >= 0) {
+      data.sessions.splice(readLaterIdx + 1, 0, trash.session);
+    } else {
+      data.sessions.unshift(trash.session);
+    }
+    await setData(data);
+    await clearTrash();
+    return { type: 'session', name: trash.session.name };
+
+  } else if (trash.type === 'session-clear') {
+    // Restore cleared Read Later tabs
+    let session = data.sessions.find(s => s.id === READ_LATER_ID);
+    if (!session) {
+      session = {
+        id: READ_LATER_ID,
+        name: 'Read Later',
+        createdAt: Date.now(),
+        isPinned: true,
+        tabs: []
+      };
+      data.sessions.unshift(session);
+    }
+    session.tabs = [...trash.tabs, ...session.tabs];
+    await setData(data);
+    await clearTrash();
+    return { type: 'session-clear', name: 'Read Later' };
+
+  } else if (trash.type === 'commit-tab') {
+    // Undo a tab commit: remove from storage, reopen the URL
+    const session = data.sessions.find(s => s.id === trash.sessionId);
+    if (session) {
+      session.tabs = session.tabs.filter(t => t.id !== trash.tab.id);
+    }
+    await setData(data);
+    await clearTrash();
+    return { type: 'commit-tab', name: trash.tab.title, url: trash.tab.url };
+
+  } else if (trash.type === 'commit-session') {
+    // Undo a session commit: remove session from storage, reopen all URLs
+    data.sessions = data.sessions.filter(s => s.id !== trash.session.id);
+    await setData(data);
+    await clearTrash();
+    return {
+      type: 'commit-session',
+      name: trash.session.name,
+      urls: trash.session.tabs.map(t => t.url)
+    };
+  }
+
+  return null;
+}
+
+/* =====================
+   Export / Import
+   ===================== */
+
+/**
+ * Export all data as a JSON string.
+ * @returns {Promise<string>}
+ */
+async function exportData() {
+  const data = await getData();
+  return JSON.stringify(data, null, 2);
+}
+
+/**
+ * Import data from a JSON string. Merges with existing data.
+ * Imported sessions get new IDs to avoid collisions.
+ * Read Later tabs from import merge into existing Read Later.
+ * @param {string} jsonString
+ * @param {boolean} replaceAll - if true, replaces all existing data
+ * @returns {Promise<{sessionsAdded: number, tabsAdded: number}>}
+ */
+async function importData(jsonString, replaceAll = false) {
+  let imported;
+  try {
+    imported = JSON.parse(jsonString);
+  } catch {
+    throw new Error('Invalid JSON file');
+  }
+
+  if (!imported || !Array.isArray(imported.sessions)) {
+    throw new Error('Invalid GitTab backup format: missing sessions array');
+  }
+
+  if (replaceAll) {
+    // Replace all — give new IDs but keep structure
+    const newSessions = imported.sessions.map(s => ({
+      ...s,
+      id: s.id === READ_LATER_ID ? READ_LATER_ID : generateId('sess'),
+      tabs: s.tabs.map(t => ({ ...t, id: generateId('tab') }))
+    }));
+    await setData({ sessions: newSessions });
+    const totalTabs = newSessions.reduce((sum, s) => sum + s.tabs.length, 0);
+    return { sessionsAdded: newSessions.length, tabsAdded: totalTabs };
+  }
+
+  // Merge strategy
+  const data = await getData();
+  let sessionsAdded = 0;
+  let tabsAdded = 0;
+
+  for (const importedSession of imported.sessions) {
+    if (importedSession.id === READ_LATER_ID || importedSession.isPinned) {
+      // Merge Read Later tabs into existing Read Later
+      await getReadLaterSession(); // ensure it exists
+      const freshData = await getData();
+      const readLater = freshData.sessions.find(s => s.id === READ_LATER_ID);
+      if (readLater) {
+        const existingUrls = new Set(readLater.tabs.map(t => t.url));
+        for (const tab of importedSession.tabs) {
+          if (!existingUrls.has(tab.url)) {
+            readLater.tabs.push({ ...tab, id: generateId('tab') });
+            tabsAdded++;
+          }
+        }
+        Object.assign(data, freshData);
+      }
+    } else {
+      // Add as a new session with a new ID
+      const newSession = {
+        ...importedSession,
+        id: generateId('sess'),
+        tabs: importedSession.tabs.map(t => ({ ...t, id: generateId('tab') }))
+      };
+      data.sessions.push(newSession);
+      sessionsAdded++;
+      tabsAdded += newSession.tabs.length;
+    }
+  }
+
+  await setData(data);
+  return { sessionsAdded, tabsAdded };
+}
+
+// Export for use in other modules
 if (typeof globalThis !== 'undefined') {
   globalThis.GitTabStorage = {
     getData,
@@ -248,7 +486,14 @@ if (typeof globalThis !== 'undefined') {
     getAllSessions,
     getRecentCommits,
     generateId,
+    setTrash,
+    getTrash,
+    clearTrash,
+    undoLastDelete,
+    exportData,
+    importData,
     READ_LATER_ID,
+    TRASH_KEY,
     STORAGE_KEY
   };
 }

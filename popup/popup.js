@@ -164,8 +164,7 @@ async function handleCommitTab() {
     });
 
     if (response?.success) {
-      showToast('Tab committed ✓');
-      // Reload recent commits
+      showUndoToast('Tab committed ✓');
       setTimeout(() => loadRecentCommits(), 300);
     } else {
       showToast('Error: ' + (response?.error ?? 'Something went wrong'));
@@ -222,7 +221,7 @@ async function handleCommitSession() {
     });
 
     if (response?.success) {
-      showToast(`Session committed: ${response.session.tabs.length} tabs ✓`);
+      showUndoToast(`Session committed: ${response.session.tabs.length} tabs ✓`);
       handleCancelSession();
       setTimeout(() => loadRecentCommits(), 300);
     } else {
@@ -279,4 +278,34 @@ function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str || '';
   return div.innerHTML;
+}
+
+/**
+ * Show a toast with an Undo link after commits.
+ */
+function showUndoToast(message, duration = 4000) {
+  elements.toast.innerHTML = `
+    ${escapeHtml(message)}
+    <span class="toast-undo" style="margin-left:12px;text-decoration:underline;cursor:pointer;opacity:0.8">Undo</span>
+  `;
+  elements.toast.classList.add('show');
+
+  const undoLink = elements.toast.querySelector('.toast-undo');
+  if (undoLink) {
+    undoLink.addEventListener('click', async () => {
+      try {
+        const resp = await chrome.runtime.sendMessage({ action: 'UNDO_LAST_ACTION' });
+        if (resp?.success) {
+          showToast('Undone ✓');
+          setTimeout(() => loadRecentCommits(), 300);
+        } else {
+          showToast(resp?.error ?? 'Undo failed');
+        }
+      } catch {
+        showToast('Undo failed');
+      }
+    }, { once: true });
+  }
+
+  setTimeout(() => elements.toast.classList.remove('show'), duration);
 }

@@ -22,8 +22,6 @@ function enqueueStorage(fn) {
 
 /**
  * If removing these tabs would leave the window empty, open the GitTab dashboard first so the window stays open.
- * @param {number} windowId
- * @param {number[]} tabIdsToRemove
  */
 async function ensureWindowSurvivesAfterRemovals(windowId, tabIdsToRemove) {
   const tabs = await chrome.tabs.query({ windowId });
@@ -38,22 +36,75 @@ async function ensureWindowSurvivesAfterRemovals(windowId, tabIdsToRemove) {
   }
 }
 
-/**
- * Message handler — all popup/dashboard communication goes through here.
- */
+/* =====================
+   Context Menu Setup
+   ===================== */
+
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.contextMenus.create({
+    id: 'gittab-save-tab',
+    title: 'Save this tab to GitTab',
+    contexts: ['page', 'frame']
+  });
+  chrome.contextMenus.create({
+    id: 'gittab-save-all',
+    title: 'Save all tabs in this window',
+    contexts: ['page', 'frame']
+  });
+});
+
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  if (info.menuItemId === 'gittab-save-tab') {
+    if (tab && Utils.isCommittableUrl(tab.url)) {
+      await commitCurrentTab({
+        tabId: tab.id,
+        title: tab.title,
+        url: tab.url,
+        favIconUrl: tab.favIconUrl || ''
+      });
+    }
+  } else if (info.menuItemId === 'gittab-save-all') {
+    if (tab) {
+      await commitSession(null, tab.windowId);
+    }
+  }
+});
+
+/* =====================
+   Keyboard Shortcuts
+   ===================== */
+
+chrome.commands.onCommand.addListener(async (command) => {
+  if (command === 'commit-current-tab') {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab && Utils.isCommittableUrl(tab.url)) {
+      await commitCurrentTab({
+        tabId: tab.id,
+        title: tab.title,
+        url: tab.url,
+        favIconUrl: tab.favIconUrl || ''
+      });
+    }
+  } else if (command === 'commit-all-tabs') {
+    const win = await chrome.windows.getCurrent();
+    if (win) {
+      await commitSession(null, win.id);
+    }
+  }
+});
+
+/* =====================
+   Message Handler
+   ===================== */
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   handleMessage(message).then(sendResponse).catch(err => {
     console.error('[GitTab] Error handling message:', err);
     sendResponse({ success: false, error: err.message });
   });
-  return true; // Keep the message channel open for async response
+  return true;
 });
 
-/**
- * Route messages to the appropriate handler.
- * @param {Object} message
- * @returns {Promise<Object>}
- */
 async function handleMessage(message) {
   switch (message.action) {
     case 'COMMIT_CURRENT_TAB':
@@ -70,6 +121,9 @@ async function handleMessage(message) {
 
     case 'RESTORE_SESSION':
       return restoreSession(message.tabs);
+
+    case 'RESTORE_SESSION_NEW_WINDOW':
+      return restoreSessionNewWindow(message.tabs);
 
     case 'GET_ACTIVE_TAB':
       return getActiveTab();
@@ -92,14 +146,27 @@ async function handleMessage(message) {
         .then(() => ({ success: true }))
         .catch(err => ({ success: false, error: err.message }));
 
+    case 'UNDO_LAST_ACTION':
+      return handleUndo();
+
+    case 'GET_TRASH':
+      return handleGetTrash();
+
+    case 'EXPORT_DATA':
+      return handleExport();
+
+    case 'IMPORT_DATA':
+      return handleImport(message.jsonString, message.replaceAll);
+
     default:
       return { success: false, error: `Unknown action: ${message.action}` };
   }
 }
 
-/**
- * Commit the current active tab to "Read Later" and close it.
- */
+/* =====================
+   Commit Operations
+   ===================== */
+
 async function commitCurrentTab(tabData) {
   if (!Utils.isCommittableUrl(tabData?.url)) {
     return { success: false, error: 'Cannot commit this page type' };
@@ -113,6 +180,14 @@ async function commitCurrentTab(tabData) {
         url: tabData.url,
         favIconUrl: tabData.favIconUrl || ''
       });
+    });
+
+    // Stash in trash for undo (commit undo = remove from storage + reopen URL)
+    await Storage.setTrash({
+      type: 'commit-tab',
+      sessionId: Storage.READ_LATER_ID,
+      tab: { ...tab },
+      deletedAt: Date.now()
     });
 
     if (tabData.tabId) {
@@ -131,10 +206,6 @@ async function commitCurrentTab(tabData) {
   }
 }
 
-/**
- * Commit all tabs in the current window as a new session and close them.
- * Skips pinned tabs and non-committable URLs.
- */
 async function commitSession(sessionName, windowId) {
   if (windowId == null) {
     return { success: false, error: 'No window' };
@@ -163,6 +234,13 @@ async function commitSession(sessionName, windowId) {
       })))
     );
 
+    // Stash in trash for undo (commit undo = remove session + reopen URLs)
+    await Storage.setTrash({
+      type: 'commit-session',
+      session: { ...session },
+      deletedAt: Date.now()
+    });
+
     const tabIds = committable.map(t => t.id);
     try {
       await ensureWindowSurvivesAfterRemovals(windowId, tabIds);
@@ -177,9 +255,50 @@ async function commitSession(sessionName, windowId) {
   }
 }
 
+/* =====================
+   Restore Operations
+   ===================== */
+
+async function restoreTab(url) {
+  const tab = await chrome.tabs.create({ url, active: true });
+  return { success: true, tabId: tab.id };
+}
+
+async function restoreSession(tabs) {
+  for (let i = 0; i < tabs.length; i++) {
+    await chrome.tabs.create({ url: tabs[i].url, active: i === 0 });
+  }
+  return { success: true, restoredCount: tabs.length };
+}
+
 /**
- * Discard inactive tabs to free memory (without closing them).
+ * Restore all tabs in a new window, preserving order.
  */
+async function restoreSessionNewWindow(tabs) {
+  if (!tabs || tabs.length === 0) {
+    return { success: false, error: 'No tabs to restore' };
+  }
+
+  // Create window with the first tab
+  const win = await chrome.windows.create({ url: tabs[0].url, focused: true });
+
+  // Add remaining tabs in order
+  for (let i = 1; i < tabs.length; i++) {
+    await chrome.tabs.create({
+      windowId: win.id,
+      url: tabs[i].url,
+      active: false,
+      index: i
+    });
+  }
+
+  return { success: true, restoredCount: tabs.length, windowId: win.id };
+}
+
+/* =====================
+   Memory Management
+   ===================== */
+
 async function discardInactiveTabs() {
   const tabs = await chrome.tabs.query({ active: false, discarded: false });
   let discarded = 0;
@@ -198,27 +317,10 @@ async function discardInactiveTabs() {
   return { success: true, discardedCount: discarded };
 }
 
-/**
- * Restore a single tab by opening its URL.
- */
-async function restoreTab(url) {
-  const tab = await chrome.tabs.create({ url, active: true });
-  return { success: true, tabId: tab.id };
-}
+/* =====================
+   Tab Info
+   ===================== */
 
-/**
- * Restore all tabs in a session (first tab is focused).
- */
-async function restoreSession(tabs) {
-  for (let i = 0; i < tabs.length; i++) {
-    await chrome.tabs.create({ url: tabs[i].url, active: i === 0 });
-  }
-  return { success: true, restoredCount: tabs.length };
-}
-
-/**
- * Get info about the currently active tab.
- */
 async function getActiveTab() {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (tab) {
@@ -235,9 +337,6 @@ async function getActiveTab() {
   return { success: false, error: 'No active tab' };
 }
 
-/**
- * Get the count of open (non-pinned) committable tabs in a window.
- */
 async function getTabCount(windowId) {
   if (windowId == null) {
     return { success: false, error: 'No window', count: 0, total: 0 };
@@ -251,3 +350,57 @@ async function getTabCount(windowId) {
   );
   return { success: true, count: committable.length, total: tabs.length };
 }
+
+/* =====================
+   Undo / Trash
+   ===================== */
+
+async function handleUndo() {
+  try {
+    const result = await enqueueStorage(() => Storage.undoLastDelete());
+    if (!result) {
+      return { success: false, error: 'Nothing to undo' };
+    }
+
+    // For commit undos, reopen the tabs
+    if (result.type === 'commit-tab' && result.url) {
+      await chrome.tabs.create({ url: result.url, active: true });
+    } else if (result.type === 'commit-session' && result.urls) {
+      for (const url of result.urls) {
+        await chrome.tabs.create({ url, active: false });
+      }
+    }
+
+    return { success: true, restored: result };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+async function handleGetTrash() {
+  const trash = await Storage.getTrash();
+  return { success: true, trash };
+}
+
+/* =====================
+   Export / Import
+   ===================== */
+
+async function handleExport() {
+  try {
+    const json = await Storage.exportData();
+    return { success: true, json };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+
+async function handleImport(jsonString, replaceAll = false) {
+  try {
+    const result = await enqueueStorage(() => Storage.importData(jsonString, replaceAll));
+    return { success: true, ...result };
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
+

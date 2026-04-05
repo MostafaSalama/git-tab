@@ -1,13 +1,14 @@
 {
   "manifest_version": 3,
   "name": "GitTab",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Save, organize, and restore your browser tabs like Git commits. Lightweight tab manager that frees up memory.",
   "permissions": [
     "tabs",
     "windows",
     "storage",
-    "favicon"
+    "favicon",
+    "contextMenus"
   ],
   "action": {
     "default_popup": "popup/popup.html",
@@ -25,5 +26,19 @@
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
+  },
+  "commands": {
+    "commit-current-tab": {
+      "suggested_key": {
+        "default": "Alt+S"
+      },
+      "description": "Commit current tab to Read Later"
+    },
+    "commit-all-tabs": {
+      "suggested_key": {
+        "default": "Alt+Shift+S"
+      },
+      "description": "Commit all tabs in this window"
+    }
   }
 }

@@ -14,6 +14,10 @@ const elements = {
   totalSessions:    document.getElementById('total-sessions'),
   totalTabs:        document.getElementById('total-tabs'),
   btnDiscard:       document.getElementById('btn-discard'),
+  btnExport:        document.getElementById('btn-export'),
+  btnImport:        document.getElementById('btn-import'),
+  importFileInput:  document.getElementById('import-file-input'),
+  undoFab:          document.getElementById('undo-fab'),
   toast:            document.getElementById('toast'),
   confirmOverlay:   document.getElementById('confirm-overlay'),
   confirmTitle:     document.getElementById('confirm-title'),
@@ -35,14 +39,19 @@ let confirmCallback = null;
 document.addEventListener('DOMContentLoaded', async () => {
   await loadSessions();
   bindEvents();
-  // Focus search on load
+  checkTrash();
   elements.searchInput.focus();
 });
 
 // Listen for storage changes (e.g., from popup commits)
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && changes[GitTabStorage.STORAGE_KEY]) {
-    loadSessions();
+  if (area === 'local') {
+    if (changes[GitTabStorage.STORAGE_KEY]) {
+      loadSessions();
+    }
+    if (changes[GitTabStorage.TRASH_KEY]) {
+      checkTrash();
+    }
   }
 });
 
@@ -115,9 +124,21 @@ function renderSessionCard(session) {
           <span class="session-tab-count">${tabCountText}</span>
           <span class="session-time">${timeText}</span>
           <div class="session-actions">
-            <button class="session-action-btn" data-action="restore-session" data-session-id="${session.id}" title="Restore all tabs">
-              <span class="material-symbols-outlined" style="font-size:18px;">open_in_new</span>
-            </button>
+            <div class="session-restore-group">
+              <button class="session-action-btn" data-action="toggle-restore-menu" data-session-id="${session.id}" title="Restore tabs">
+                <span class="material-symbols-outlined" style="font-size:18px;">open_in_new</span>
+              </button>
+              <div class="restore-dropdown" id="restore-menu-${session.id}">
+                <button class="restore-dropdown-item" data-action="restore-session" data-session-id="${session.id}">
+                  <span class="material-symbols-outlined">tab</span>
+                  Open in current window
+                </button>
+                <button class="restore-dropdown-item" data-action="restore-session-new-window" data-session-id="${session.id}">
+                  <span class="material-symbols-outlined">open_in_new</span>
+                  Open in new window
+                </button>
+              </div>
+            </div>
             ${session.id === GitTabStorage.READ_LATER_ID ? '' : `
             <button class="session-action-btn" data-action="rename-session" data-session-id="${session.id}" title="Rename session">
               <span class="material-symbols-outlined" style="font-size:18px;">edit</span>
@@ -269,6 +290,16 @@ function bindEvents() {
     }
   });
 
+  // Export
+  elements.btnExport.addEventListener('click', handleExport);
+
+  // Import
+  elements.btnImport.addEventListener('click', () => elements.importFileInput.click());
+  elements.importFileInput.addEventListener('change', handleImport);
+
+  // Undo FAB
+  elements.undoFab.addEventListener('click', handleUndo);
+
   // Confirm dialog buttons
   elements.confirmCancel.addEventListener('click', closeConfirm);
   elements.confirmOverlay.addEventListener('click', (e) => {
@@ -313,9 +344,21 @@ function handleSessionListClick(e) {
       toggleSession(target.dataset.sessionId);
       break;
 
+    case 'toggle-restore-menu':
+      e.stopPropagation();
+      toggleRestoreMenu(target.dataset.sessionId);
+      break;
+
     case 'restore-session':
       e.stopPropagation();
+      closeAllRestoreMenus();
       restoreSession(target.dataset.sessionId);
+      break;
+
+    case 'restore-session-new-window':
+      e.stopPropagation();
+      closeAllRestoreMenus();
+      restoreSessionNewWindow(target.dataset.sessionId);
       break;
 
     case 'rename-session':
@@ -372,6 +415,52 @@ async function restoreSession(sessionId) {
   } catch (e) {
     showToast('Failed to restore session');
   }
+}
+
+async function restoreSessionNewWindow(sessionId) {
+  const session = allSessions.find(s => s.id === sessionId);
+  if (!session || session.tabs.length === 0) {
+    showToast('No tabs to restore');
+    return;
+  }
+
+  try {
+    const response = await chrome.runtime.sendMessage({
+      action: 'RESTORE_SESSION_NEW_WINDOW',
+      tabs: session.tabs
+    });
+
+    if (response?.success) {
+      showToast(`Opened ${response.restoredCount} tabs in new window ✓`);
+    } else {
+      showToast(response?.error ?? 'Failed to restore session');
+    }
+  } catch (e) {
+    showToast('Failed to restore session');
+  }
+}
+
+function toggleRestoreMenu(sessionId) {
+  const menu = document.getElementById(`restore-menu-${sessionId}`);
+  if (!menu) return;
+
+  const isOpen = menu.classList.contains('visible');
+  closeAllRestoreMenus();
+  if (!isOpen) {
+    menu.classList.add('visible');
+    // Close on outside click
+    const closeOnOutside = (e) => {
+      if (!menu.contains(e.target) && !e.target.closest(`[data-action="toggle-restore-menu"]`)) {
+        menu.classList.remove('visible');
+        document.removeEventListener('click', closeOnOutside);
+      }
+    };
+    setTimeout(() => document.addEventListener('click', closeOnOutside), 0);
+  }
+}
+
+function closeAllRestoreMenus() {
+  document.querySelectorAll('.restore-dropdown.visible').forEach(m => m.classList.remove('visible'));
 }
 
 function startRenameSession(sessionId) {
@@ -522,4 +611,117 @@ function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str || '';
   return div.innerHTML;
+}
+
+/* =====================
+   Export / Import
+   ===================== */
+
+async function handleExport() {
+  try {
+    const response = await chrome.runtime.sendMessage({ action: 'EXPORT_DATA' });
+    if (!response?.success) {
+      showToast(response?.error ?? 'Export failed');
+      return;
+    }
+
+    const blob = new Blob([response.json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const date = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = `gittab_backup_${date}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    showToast('Backup exported ✓');
+  } catch (e) {
+    showToast('Export failed');
+  }
+}
+
+async function handleImport(e) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+
+  // Reset the input so the same file can be re-imported
+  elements.importFileInput.value = '';
+
+  try {
+    const text = await file.text();
+
+    showConfirm(
+      'Import Backup',
+      `Import "${file.name}"? This will merge the backup into your existing data. No existing sessions will be overwritten.`,
+      async () => {
+        try {
+          const response = await chrome.runtime.sendMessage({
+            action: 'IMPORT_DATA',
+            jsonString: text,
+            replaceAll: false
+          });
+
+          if (response?.success) {
+            showToast(`Imported ${response.sessionsAdded} sessions, ${response.tabsAdded} tabs ✓`);
+            await loadSessions();
+          } else {
+            showToast(response?.error ?? 'Import failed');
+          }
+        } catch (err) {
+          showToast('Import failed: ' + err.message);
+        }
+      }
+    );
+  } catch (e) {
+    showToast('Could not read file');
+  }
+}
+
+/* =====================
+   Undo / Trash
+   ===================== */
+
+async function checkTrash() {
+  try {
+    const response = await chrome.runtime.sendMessage({ action: 'GET_TRASH' });
+    if (response?.success && response.trash) {
+      showUndoFab(response.trash);
+    } else {
+      hideUndoFab();
+    }
+  } catch {
+    hideUndoFab();
+  }
+}
+
+function showUndoFab(trash) {
+  let label = 'Undo';
+  if (trash.type === 'tab') label = `Undo delete tab`;
+  else if (trash.type === 'session') label = `Undo delete session`;
+  else if (trash.type === 'session-clear') label = `Undo clear Read Later`;
+  else if (trash.type === 'commit-tab') label = `Undo commit tab`;
+  else if (trash.type === 'commit-session') label = `Undo commit session`;
+
+  elements.undoFab.querySelector('.undo-fab-text').textContent = label;
+  elements.undoFab.style.display = 'flex';
+}
+
+function hideUndoFab() {
+  elements.undoFab.style.display = 'none';
+}
+
+async function handleUndo() {
+  try {
+    const response = await chrome.runtime.sendMessage({ action: 'UNDO_LAST_ACTION' });
+    if (response?.success) {
+      const name = response.restored?.name || 'item';
+      showToast(`Restored "${name}" ✓`);
+      hideUndoFab();
+      await loadSessions();
+    } else {
+      showToast(response?.error ?? 'Nothing to undo');
+    }
+  } catch (e) {
+    showToast('Undo failed');
+  }
 }
